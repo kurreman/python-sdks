@@ -66,6 +66,7 @@ async def main(room: rtc.Room) -> None:
     #         pass
 
     async def receive_frames(stream: VideoStream):
+        #NOTE: For a full application, use the examples/face_landmark/face_landmark.py as an example instead. Esepecially look at def frame_loop
         async for video_event in stream:
             frame: VideoFrame = video_event.frame
 
@@ -79,14 +80,6 @@ async def main(room: rtc.Room) -> None:
             elif frame.type == proto_video.VideoBufferType.RGB24:
                 frame_reshaped = frame_data.reshape((frame.height, frame.width, 3))  # RGB
                 frame_bgr = cv2.cvtColor(frame_reshaped, cv2.COLOR_RGB2BGR)  # Convert RGB to BGR
-            # elif frame.type == proto_video.VideoBufferType.I420:
-            #     y_size = frame.height * frame.width
-            #     uv_size = (frame.height // 2) * (frame.width // 2)
-            #     y_plane = frame_data[:y_size]
-            #     uv_plane = frame_data[y_size:]
-            #     y_reshaped = y_plane.reshape((frame.height, frame.width))
-            #     uv_reshaped = uv_plane.reshape((frame.height // 2, frame.width // 2, 2))
-            #     frame_bgr = cv2.cvtColor(y_reshaped, cv2.COLOR_YUV2BGR_I420)
             elif frame.type == proto_video.VideoBufferType.I420:
                 # OpenCV expects the full YUV I420 data as a single array
                 yuv_data = frame_data.reshape((frame.height * 3) // 2, frame.width)

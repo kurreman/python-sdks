@@ -17,18 +17,20 @@ async def main(room: rtc.Room) -> None:
     def on_participant_disconnect(participant: rtc.Participant, *_):
         logging.info("participant disconnected: %s", participant.identity)
 
-    token = (
-        api.AccessToken()
-        .with_identity("python-publisher")
-        .with_name("Python Publisher")
-        .with_grants(
-            api.VideoGrants(
-                room_join=True,
-                room="my-room",
-            )
-        )
-        .to_jwt()
-    )
+    # token = (
+    #     api.AccessToken()
+    #     .with_identity("python-publisher")
+    #     .with_name("Python Publisher")
+    #     .with_grants(
+    #         api.VideoGrants(
+    #             room_join=True,
+    #             room="my-room",
+    #         )
+    #     )
+    #     .to_jwt()
+    # )
+
+    token = os.getenv("LIVEKIT_TOKEN")
     url = os.getenv("LIVEKIT_URL")
 
     logging.info("connecting to %s", url)

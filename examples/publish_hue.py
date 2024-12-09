@@ -14,18 +14,19 @@ WIDTH, HEIGHT = 1280, 720
 
 
 async def main(room: rtc.Room):
-    token = (
-        api.AccessToken()
-        .with_identity("python-publisher")
-        .with_name("Python Publisher")
-        .with_grants(
-            api.VideoGrants(
-                room_join=True,
-                room="my-room",
-            )
-        )
-        .to_jwt()
-    )
+    # token = (
+    #     api.AccessToken()
+    #     .with_identity("python-publisher")
+    #     .with_name("Python Publisher")
+    #     .with_grants(
+    #         api.VideoGrants(
+    #             room_join=True,
+    #             room="my-room",
+    #         )
+    #     )
+    #     .to_jwt()
+    # )
+    token = os.getenv("LIVEKIT_TOKEN")
     url = os.getenv("LIVEKIT_URL")
     logging.info("connecting to %s", url)
     try:

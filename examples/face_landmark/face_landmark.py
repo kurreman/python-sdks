@@ -47,18 +47,19 @@ async def main(room: rtc.Room) -> None:
             tasks.add(task)
             task.add_done_callback(tasks.remove)
 
-    token = (
-        api.AccessToken()
-        .with_identity("python-bot")
-        .with_name("Python Bot")
-        .with_grants(
-            api.VideoGrants(
-                room_join=True,
-                room="my-room",
-            )
-        )
-    )
-    await room.connect(os.getenv("LIVEKIT_URL"), token.to_jwt())
+    # token = (
+    #     api.AccessToken()
+    #     .with_identity("python-bot")
+    #     .with_name("Python Bot")
+    #     .with_grants(
+    #         api.VideoGrants(
+    #             room_join=True,
+    #             room="my-room",
+    #         )
+    #     )
+    # )
+    token = os.getenv("LIVEKIT_TOKEN")
+    await room.connect(os.getenv("LIVEKIT_URL"), token)
     print("connected to room: " + room.name)
 
 
