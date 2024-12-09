@@ -6,6 +6,11 @@ import os
 
 from livekit import api, rtc
 
+import cv2
+import numpy as np
+from livekit.rtc import VideoFrame, VideoStream
+from livekit.rtc._proto import video_frame_pb2 as proto_video
+
 # ensure LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET are set
 
 
@@ -54,6 +59,52 @@ async def main(room: rtc.Room) -> None:
     ):
         logging.info("track unpublished: %s", publication.sid)
 
+    # async def receive_frames(stream: rtc.VideoStream):
+    #     async for frame in stream:
+    #         # received a video frame from the track, process it here
+    #         #Display the frame in a local window
+    #         pass
+
+    async def receive_frames(stream: VideoStream):
+        async for video_event in stream:
+            frame: VideoFrame = video_event.frame
+
+            # Extract frame data and reshape to the frame's dimensions
+            frame_data = np.array(frame.data)  # Convert memoryview to NumPy array
+
+            # Handle pixel formats
+            if frame.type == proto_video.VideoBufferType.RGBA:
+                frame_reshaped = frame_data.reshape((frame.height, frame.width, 4))  # RGBA
+                frame_bgr = cv2.cvtColor(frame_reshaped, cv2.COLOR_RGBA2BGR)  # Convert RGBA to BGR
+            elif frame.type == proto_video.VideoBufferType.RGB24:
+                frame_reshaped = frame_data.reshape((frame.height, frame.width, 3))  # RGB
+                frame_bgr = cv2.cvtColor(frame_reshaped, cv2.COLOR_RGB2BGR)  # Convert RGB to BGR
+            # elif frame.type == proto_video.VideoBufferType.I420:
+            #     y_size = frame.height * frame.width
+            #     uv_size = (frame.height // 2) * (frame.width // 2)
+            #     y_plane = frame_data[:y_size]
+            #     uv_plane = frame_data[y_size:]
+            #     y_reshaped = y_plane.reshape((frame.height, frame.width))
+            #     uv_reshaped = uv_plane.reshape((frame.height // 2, frame.width // 2, 2))
+            #     frame_bgr = cv2.cvtColor(y_reshaped, cv2.COLOR_YUV2BGR_I420)
+            elif frame.type == proto_video.VideoBufferType.I420:
+                # OpenCV expects the full YUV I420 data as a single array
+                yuv_data = frame_data.reshape((frame.height * 3) // 2, frame.width)
+                frame_bgr = cv2.cvtColor(yuv_data, cv2.COLOR_YUV2BGR_I420)
+            else:
+                print(f"Unsupported video frame format: {frame.type}")
+                continue
+
+            # Display the frame using OpenCV
+            cv2.imshow("Live Video", frame_bgr)
+
+            # Allow OpenCV to process GUI events and handle key press
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
+
+        # Cleanup OpenCV windows after the stream ends
+        cv2.destroyAllWindows()
+
     @room.on("track_subscribed")
     def on_track_subscribed(
         track: rtc.Track,
@@ -64,6 +115,7 @@ async def main(room: rtc.Room) -> None:
         if track.kind == rtc.TrackKind.KIND_VIDEO:
             _video_stream = rtc.VideoStream(track)
             # video_stream is an async iterator that yields VideoFrame
+            asyncio.ensure_future(receive_frames(_video_stream))
         elif track.kind == rtc.TrackKind.KIND_AUDIO:
             print("Subscribed to an Audio Track")
             _audio_stream = rtc.AudioStream(track)
@@ -125,18 +177,20 @@ async def main(room: rtc.Room) -> None:
     def on_reconnected() -> None:
         logging.info("reconnected")
 
-    token = (
-        api.AccessToken()
-        .with_identity("python-bot")
-        .with_name("Python Bot")
-        .with_grants(
-            api.VideoGrants(
-                room_join=True,
-                room="my-room",
-            )
-        )
-        .to_jwt()
-    )
+    # token = (
+    #     api.AccessToken()
+    #     .with_identity("python-bot")
+    #     .with_name("Python Bot")
+    #     .with_grants(
+    #         api.VideoGrants(
+    #             room_join=True,
+    #             room="my-room",
+    #         )
+    #     )
+    #     .to_jwt()
+    # )
+
+    token = os.getenv("LIVEKIT_TOKEN")
     await room.connect(os.getenv("LIVEKIT_URL"), token)
     logging.info("connected to room %s", room.name)
     logging.info("participants: %s", room.remote_participants)
@@ -166,3 +220,4 @@ if __name__ == "__main__":
         loop.run_forever()
     finally:
         loop.close()
+
