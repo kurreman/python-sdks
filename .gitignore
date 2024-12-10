@@ -166,4 +166,7 @@ cython_debug/
 
 docs
 
-*task
+*.task
+
+*.mp4
+*.MP4
