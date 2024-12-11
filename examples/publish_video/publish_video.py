@@ -1,98 +1,121 @@
 import asyncio
-import cv2
+import colorsys
+import logging
 import os
-import time
-from datetime import datetime
+from signal import SIGINT, SIGTERM
+
 import numpy as np
 from livekit import api, rtc
+import cv2
 
-# Ensure LIVEKIT_URL and LIVEKIT_TOKEN are set as environment variables
-WIDTH = 1920
-HEIGHT = 1080
+WIDTH, HEIGHT = 3840, 2160
 
-async def stream_video_to_livekit(video_path, room: rtc.Room):
+
+# ensure LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET are set
+
+
+async def main(room: rtc.Room):
+    # token = (
+    #     api.AccessToken()
+    #     .with_identity("python-publisher")
+    #     .with_name("Python Publisher")
+    #     .with_grants(
+    #         api.VideoGrants(
+    #             room_join=True,
+    #             room="my-room",
+    #         )
+    #     )
+    #     .to_jwt()
+    # )
     token = os.getenv("LIVEKIT_TOKEN")
     url = os.getenv("LIVEKIT_URL")
-
+    logging.info("connecting to %s", url)
     try:
         await room.connect(url, token)
-        print(f"Connected to room: {room.name}")
+        logging.info("connected to room %s", room.name)
     except rtc.ConnectError as e:
-        print(f"Failed to connect to the room: {e}")
+        logging.error("failed to connect to the room: %s", e)
         return
 
-    # Create video source and track
-    video_source = rtc.VideoSource(WIDTH, HEIGHT)
-    video_track = rtc.LocalVideoTrack.create_video_track("video", video_source)
-    await room.local_participant.publish_track(video_track)
-    print("Video track published.")
+    # publish a track
+    source = rtc.VideoSource(WIDTH, HEIGHT)
+    track = rtc.LocalVideoTrack.create_video_track("hue", source)
+    options = rtc.TrackPublishOptions()
+    options.source = rtc.TrackSource.SOURCE_CAMERA
+    publication = await room.local_participant.publish_track(track, options)
+    logging.info("published track %s", publication.sid)
 
-    # Stream video frames
-    await stream_video_frames(video_path, video_source)
+    asyncio.ensure_future(draw_color_cycle(source))
 
-async def stream_video_frames(video_path, video_source: rtc.VideoSource):
-    cap = cv2.VideoCapture(video_path)
+
+async def draw_color_cycle(source: rtc.VideoSource):
+    # argb_frame = bytearray(WIDTH * HEIGHT * 4)
+    # arr = np.frombuffer(argb_frame, dtype=np.uint8)
+
+    path = "examples/publish_video/casper_koray_vallentuna.MP4"
+    cap = cv2.VideoCapture(path)
 
     if not cap.isOpened():
         print("Error opening video file")
         return
 
+    # framerate = 1 / 30
+    # hue = 0.0
+
     framerate = cap.get(cv2.CAP_PROP_FPS)
-    delay = 1 / framerate
 
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
 
-        # Add timestamp to the frame
-        timestamp = int(time.time() * 1000)  # Milliseconds since epoch
-        timestamp_text = f"{timestamp}"
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 1
-        font_thickness = 2
-        text_size, _ = cv2.getTextSize(timestamp_text, font, font_scale, font_thickness)
-        text_x = 10
-        text_y = text_size[1] + 10
-        cv2.rectangle(frame, (text_x - 5, text_y - text_size[1] - 5), 
-                      (text_x + text_size[0] + 5, text_y + 5), (255, 255, 255), -1)
-        cv2.putText(frame, timestamp_text, (text_x, text_y), font, font_scale, (0, 0, 255), font_thickness)
+        start_time = asyncio.get_event_loop().time()
 
-        # Display frame locally
-        # cv2.imshow("Local Video", frame)
-        if cv2.waitKey(int(delay * 1000)) & 0xFF == ord('q'):
-            break
+        # rgb = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+        # rgb = [(x * 255) for x in rgb]  # type: ignore
 
-        # Prepare frame for LiveKit
+        # argb_color = np.array(rgb + [255], dtype=np.uint8)
+        # arr.flat[::4] = argb_color[0]
+        # arr.flat[1::4] = argb_color[1]
+        # arr.flat[2::4] = argb_color[2]
+        # arr.flat[3::4] = argb_color[3]
+
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
         argb_frame = frame.tobytes()
-        video_frame = rtc.VideoFrame(
-            WIDTH,
-            HEIGHT,
-            rtc.VideoBufferType.RGBA,
-            argb_frame,
+        assert isinstance(argb_frame, (bytearray, bytes)) and len(argb_frame) == WIDTH * HEIGHT * 4, (
+            f"argb_frame should be a bytearray of length WIDTH*HEIGHT*4={WIDTH*HEIGHT*4} but it is {type(argb_frame)} of length {len(argb_frame)}"
         )
-        video_source.capture_frame(video_frame)
 
-        await asyncio.sleep(delay)
+        frame = rtc.VideoFrame(WIDTH, 
+                               HEIGHT, 
+                               rtc.VideoBufferType.RGBA, 
+                               argb_frame)
+        
+        source.capture_frame(frame)
+        # hue = (hue + framerate / 3) % 1.0
 
-    cap.release()
-    cv2.destroyAllWindows()
+        code_duration = asyncio.get_event_loop().time() - start_time
+        await asyncio.sleep(1 / 30 - code_duration)
+
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        handlers=[logging.FileHandler("publish_hue.log"), logging.StreamHandler()],
+    )
+
     loop = asyncio.get_event_loop()
     room = rtc.Room(loop=loop)
-
-    video_file_path = "examples/publish_video/casper_koray_vallentuna_lowres.MP4"
 
     async def cleanup():
         await room.disconnect()
         loop.stop()
 
+    asyncio.ensure_future(main(room))
+    for signal in [SIGINT, SIGTERM]:
+        loop.add_signal_handler(signal, lambda: asyncio.ensure_future(cleanup()))
+
     try:
-        asyncio.ensure_future(stream_video_to_livekit(video_file_path, room))
         loop.run_forever()
-    except KeyboardInterrupt:
-        asyncio.run(cleanup())
     finally:
         loop.close()
