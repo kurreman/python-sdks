@@ -95,7 +95,7 @@ async def draw_color_cycle(source: rtc.VideoSource):
         # hue = (hue + framerate / 3) % 1.0
 
         code_duration = asyncio.get_event_loop().time() - start_time
-        await asyncio.sleep(1 / 30 - code_duration)
+        await asyncio.sleep(1 / framerate - code_duration)
 
 
 if __name__ == "__main__":
