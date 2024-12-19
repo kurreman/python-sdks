@@ -6,7 +6,7 @@ token = api.AccessToken(os.getenv('LIVEKIT_API_KEY'), os.getenv('LIVEKIT_API_SEC
     .with_name("Python Bot") \
     .with_grants(api.VideoGrants(
         room_join=True,
-        room="nxmh-jfq7",
+        room=os.getenv('LIVEKIT_ROOM_NAME'),
     )).to_jwt()
 
 print(token)

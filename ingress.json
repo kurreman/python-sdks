@@ -1,0 +1,8 @@
+{
+    "input_type": 1,
+    "name": "DJICloudStreamIngressNoTranscodingKoray",
+    "room_name": "room0",
+    "participant_identity": "djicloud0",
+    "participant_name": "djicloud0",
+    "enable_transcoding": false
+}
